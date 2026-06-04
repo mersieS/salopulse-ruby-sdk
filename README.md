@@ -43,7 +43,7 @@ Salopulse.close
 
 | Seçenek            | Varsayılan | Açıklama                                       |
 |--------------------|------------|------------------------------------------------|
-| `dsn`              | —          | **Zorunlu.** `https://api_key@host` formatı    |
+| `dsn`              | —          | **Zorunlu.** `http(s)://api_key@host` formatı  |
 | `release`          | `nil`      | Sürüm etiketi (genelde git SHA)                |
 | `environment`      | `nil`      | `production` / `staging` / ...                 |
 | `sample_rate`      | `1.0`      | 0..1 arası örnekleme oranı                     |
