@@ -15,14 +15,14 @@ module Salopulse
           raise Salopulse::Error::InvalidDSN, "geçersiz URL"
         end
 
-      raise Salopulse::Error::InvalidDSN, "scheme https olmalı" unless uri.scheme == "https"
+      raise Salopulse::Error::InvalidDSN, "scheme https olmalı" unless uri.scheme == "http"
       raise Salopulse::Error::InvalidDSN, "api_key eksik" if uri.userinfo.nil? || uri.userinfo.empty?
       raise Salopulse::Error::InvalidDSN, "host eksik" if uri.host.nil? || uri.host.empty?
 
       @api_key = uri.userinfo
       @host = uri.host
       port_part = (uri.port && uri.port != 443) ? ":#{uri.port}" : ""
-      @ingest_url = "https://#{uri.host}#{port_part}/api/v1/ingest"
+      @ingest_url = "http://#{uri.host}#{port_part}/api/v1/ingest"
     end
   end
 end
