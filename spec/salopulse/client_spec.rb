@@ -17,6 +17,24 @@ RSpec.describe Salopulse::Client do
     expect(client.buffer).to be(first_buffer)
   end
 
+  it "rebuilds runtime after a forked process changes pid" do
+    current_pid = 10_001
+    allow(Process).to receive(:pid) { current_pid }
+
+    client.init(dsn: VALID_DSN, flush_interval: 0.1, flush_batch_size: 10)
+    parent_buffer = client.buffer
+
+    current_pid = 10_002
+
+    client.capture_message("hello from child")
+
+    expect(client.buffer).not_to be(parent_buffer)
+    expect(client.flusher.alive?).to be(true)
+
+    client.flush(timeout: 2)
+    expect(WebMock).to have_requested(:post, INGEST_URL).at_least_once
+  end
+
   it "no-ops when enabled: false" do
     client.init(dsn: VALID_DSN, enabled: false)
     expect(client.disabled?).to be(true)

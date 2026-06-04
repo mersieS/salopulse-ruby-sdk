@@ -70,6 +70,13 @@ SDK aşağıdaki alanları otomatik maskeler (`[FILTERED]`):
 - Buffer üst sınırlı (`max_buffer_size`); patlayıp uygulamayı çökertmez
 - Transport hatalarında exponential backoff retry (max 3) — başarısızsa event düşer, uygulamaya hata sızmaz
 
+## Teslimat Davranışı
+
+- SQL event'leri request içinde hemen POST edilmez; önce request sonunda `flush_request_scope_events` ile kuyruğa alınır. Bu, N+1 tespiti için bilinçli bir tasarım.
+- Kuyruğa alınan event'ler varsayılan olarak anında değil, background flusher tarafından `flush_interval` kadar bekletilip toplu gönderilir. Varsayılan değer `5` saniyedir.
+- Process kapanırken `close` son flush'ı zorlar. Bu yüzden fork'lu sunucularda veya kısa ömürlü process'lerde sorun varsa davranış "ancak kapanışta gidiyor" gibi görünebilir.
+- Daha hızlı görünürlük istiyorsanız `flush_interval` değerini düşürün veya kritik yerlerde `Salopulse.flush` çağırın.
+
 ## Geliştirme
 
 ```

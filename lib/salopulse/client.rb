@@ -19,11 +19,15 @@ module Salopulse
     def initialize
       @initialized = false
       @mutex = Mutex.new
+      @pid = nil
     end
 
     def init(options = {})
       @mutex.synchronize do
-        return self if @initialized
+        if @initialized
+          build_runtime!(reset_buffer: forked_process?) unless runtime_ready?
+          return self
+        end
 
         @configuration = Configuration.new
         options.each { |k, v| @configuration.public_send("#{k}=", v) if @configuration.respond_to?("#{k}=") }
@@ -31,20 +35,7 @@ module Salopulse
         return self unless @configuration.enabled
 
         @dsn = DSN.new(@configuration.dsn)
-        @buffer = Buffer.new(max_size: @configuration.max_buffer_size)
-        @transport = Transport.new(
-          dsn: @dsn,
-          sdk_version: Salopulse::VERSION,
-          logger: @configuration.logger
-        )
-        @flusher = Flusher.new(
-          buffer: @buffer,
-          transport: @transport,
-          interval: @configuration.flush_interval,
-          batch_size: @configuration.flush_batch_size,
-          logger: @configuration.logger
-        )
-        @flusher.start
+        build_runtime!(reset_buffer: true)
 
         install_at_exit_hook
 
@@ -179,12 +170,15 @@ module Salopulse
 
     def flush(timeout: 5)
       return 0 if disabled?
+      ensure_runtime_ready!
       @flusher.flush_all(timeout: timeout)
     end
 
     def close
       return unless @initialized
+      ensure_runtime_ready!
       @flusher&.stop(timeout: 5)
+      @pid = nil
       @initialized = false
     end
 
@@ -196,12 +190,14 @@ module Salopulse
       @transport = nil
       @flusher = nil
       @dsn = nil
+      @pid = nil
       @initialized = false
     end
 
     private
 
     def enqueue(event)
+      return false unless ensure_runtime_ready!
       return false unless @buffer
       if @configuration.before_send
         event = @configuration.before_send.call(event)
@@ -226,6 +222,45 @@ module Salopulse
       return true if rate >= 1.0
       return false if rate <= 0.0
       rand < rate
+    end
+
+    def ensure_runtime_ready!
+      return false if !@initialized || !@configuration&.enabled
+      return true if runtime_ready?
+
+      @mutex.synchronize do
+        return false if !@initialized || !@configuration&.enabled
+        return true if runtime_ready?
+
+        build_runtime!(reset_buffer: forked_process?)
+      end
+      true
+    end
+
+    def build_runtime!(reset_buffer:)
+      @buffer = Buffer.new(max_size: @configuration.max_buffer_size) if reset_buffer || @buffer.nil?
+      @transport = Transport.new(
+        dsn: @dsn,
+        sdk_version: Salopulse::VERSION,
+        logger: @configuration.logger
+      )
+      @flusher = Flusher.new(
+        buffer: @buffer,
+        transport: @transport,
+        interval: @configuration.flush_interval,
+        batch_size: @configuration.flush_batch_size,
+        logger: @configuration.logger
+      )
+      @flusher.start
+      @pid = Process.pid
+    end
+
+    def runtime_ready?
+      @pid == Process.pid && @flusher&.alive?
+    end
+
+    def forked_process?
+      !@pid.nil? && @pid != Process.pid
     end
 
     def detect_dialect

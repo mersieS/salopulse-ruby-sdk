@@ -49,6 +49,10 @@ module Salopulse
       @thread&.join(timeout)
     end
 
+    def alive?
+      @thread&.alive? || false
+    end
+
     private
 
     def sleep_with_interrupt(seconds)
