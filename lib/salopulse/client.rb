@@ -1,0 +1,251 @@
+require "time"
+require "singleton"
+require_relative "version"
+require_relative "configuration"
+require_relative "dsn"
+require_relative "buffer"
+require_relative "transport"
+require_relative "flusher"
+require_relative "sanitizer"
+require_relative "local_fingerprint"
+require_relative "request_context"
+
+module Salopulse
+  class Client
+    include Singleton
+
+    attr_reader :configuration, :buffer, :transport, :flusher, :dsn
+
+    def initialize
+      @initialized = false
+      @mutex = Mutex.new
+    end
+
+    def init(options = {})
+      @mutex.synchronize do
+        return self if @initialized
+
+        @configuration = Configuration.new
+        options.each { |k, v| @configuration.public_send("#{k}=", v) if @configuration.respond_to?("#{k}=") }
+
+        return self unless @configuration.enabled
+
+        @dsn = DSN.new(@configuration.dsn)
+        @buffer = Buffer.new(max_size: @configuration.max_buffer_size)
+        @transport = Transport.new(
+          dsn: @dsn,
+          sdk_version: Salopulse::VERSION,
+          logger: @configuration.logger
+        )
+        @flusher = Flusher.new(
+          buffer: @buffer,
+          transport: @transport,
+          interval: @configuration.flush_interval,
+          batch_size: @configuration.flush_batch_size,
+          logger: @configuration.logger
+        )
+        @flusher.start
+
+        install_at_exit_hook
+
+        @initialized = true
+        self
+      end
+    end
+
+    def initialized?
+      @initialized
+    end
+
+    def uninitialized?
+      !@initialized
+    end
+
+    def disabled?
+      !@initialized || !@configuration&.enabled
+    end
+
+    # --- Capture API ---------------------------------------------------------
+
+    def capture_sql(query:, duration_ms:, rows_returned: nil)
+      return if disabled?
+      return if RequestContext.suppressed?
+      return unless sample?
+
+      ctx = RequestContext.current
+      fingerprint = LocalFingerprint.for(query)
+
+      event = build_event(
+        type: "sql",
+        data: {
+          "query" => query,
+          "duration_ms" => duration_ms.to_i,
+          "endpoint" => ctx&.dig(:endpoint),
+          "http_method" => ctx&.dig(:http_method),
+          "rows_returned" => rows_returned,
+          "n1_detected" => false
+        }.compact,
+        ctx: ctx,
+        extra_envelope: { "database_dialect" => detect_dialect }
+      )
+
+      if ctx
+        RequestContext.record_sql_event(event, fingerprint)
+      else
+        enqueue(event)
+      end
+    end
+
+    def capture_exception(error, user_context: nil, environment_data: nil)
+      return if disabled?
+      return unless sample?
+
+      ctx = RequestContext.current
+      data = {
+        "error_class" => error.class.name,
+        "message" => error.message.to_s,
+        "stack_trace" => Array(error.backtrace).join("\n"),
+        "endpoint" => ctx&.dig(:endpoint),
+        "http_method" => ctx&.dig(:http_method)
+      }
+      user = user_context || ctx&.dig(:user)
+      data["user_context"] = Sanitizer.scrub_hash(user) if user
+      data["environment_data"] = Sanitizer.scrub_hash(environment_data) if environment_data
+
+      enqueue(build_event(type: "error", data: data.compact, ctx: ctx))
+    end
+
+    def capture_message(message, level: :info)
+      return if disabled?
+      return unless sample?
+
+      ctx = RequestContext.current
+      data = {
+        "error_class" => "Salopulse::Message",
+        "message" => message.to_s,
+        "stack_trace" => "",
+        "endpoint" => ctx&.dig(:endpoint),
+        "http_method" => ctx&.dig(:http_method),
+        "level" => level.to_s
+      }.compact
+      enqueue(build_event(type: "error", data: data, ctx: ctx))
+    end
+
+    def capture_performance(endpoint:, http_method:, duration_ms:, status_code:, cpu_usage: nil, memory_usage: nil)
+      return if disabled?
+      return unless sample?
+
+      ctx = RequestContext.current
+      data = {
+        "endpoint" => endpoint,
+        "http_method" => http_method,
+        "duration_ms" => duration_ms.to_i,
+        "status_code" => status_code.to_i
+      }
+      data["cpu_usage"] = cpu_usage if cpu_usage
+      data["memory_usage"] = memory_usage if memory_usage
+
+      enqueue(build_event(type: "performance", data: data, ctx: ctx))
+    end
+
+    # --- Request scope -------------------------------------------------------
+
+    def flush_request_scope_events
+      ctx = RequestContext.current
+      return unless ctx
+
+      threshold = @configuration.n1_threshold
+      counts = ctx[:sql_fingerprint_counts]
+
+      ctx[:sql_events].each do |event, fingerprint|
+        if counts[fingerprint] >= threshold
+          event[:data]["n1_detected"] = true
+        end
+        enqueue(event)
+      end
+    end
+
+    # --- Context helpers -----------------------------------------------------
+
+    def set_user(attrs)
+      RequestContext.set_user(attrs)
+    end
+
+    def set_tag(key, value)
+      RequestContext.set_tag(key, value)
+    end
+
+    # --- Lifecycle -----------------------------------------------------------
+
+    def flush(timeout: 5)
+      return 0 if disabled?
+      @flusher.flush_all(timeout: timeout)
+    end
+
+    def close
+      return unless @initialized
+      @flusher&.stop(timeout: 5)
+      @initialized = false
+    end
+
+    # Used by tests to wipe singleton state.
+    def reset!
+      close if @initialized
+      @configuration = nil
+      @buffer = nil
+      @transport = nil
+      @flusher = nil
+      @dsn = nil
+      @initialized = false
+    end
+
+    private
+
+    def enqueue(event)
+      return false unless @buffer
+      if @configuration.before_send
+        event = @configuration.before_send.call(event)
+        return false if event.nil?
+      end
+      @buffer.push(event)
+    end
+
+    def build_event(type:, data:, ctx:, extra_envelope: {})
+      envelope = {
+        "request_id" => ctx&.dig(:request_id),
+        "release" => @configuration.release,
+        "sdk" => { "version" => Salopulse::VERSION, "platform" => "ruby" },
+        "timestamp" => Time.now.utc.iso8601(3)
+      }.merge(extra_envelope).compact
+
+      { type: type, data: data, envelope: envelope }
+    end
+
+    def sample?
+      rate = @configuration.sample_rate.to_f
+      return true if rate >= 1.0
+      return false if rate <= 0.0
+      rand < rate
+    end
+
+    def detect_dialect
+      return "unknown" unless defined?(ActiveRecord::Base) && ActiveRecord::Base.connected?
+      adapter = ActiveRecord::Base.connection.adapter_name.to_s.downcase
+      case adapter
+      when /postgres/ then "postgres"
+      when /mysql/    then "mysql"
+      when /sqlite/   then "sqlite"
+      when /sqlserver|mssql/ then "mssql"
+      else "unknown"
+      end
+    rescue StandardError
+      "unknown"
+    end
+
+    def install_at_exit_hook
+      return if @at_exit_installed
+      @at_exit_installed = true
+      at_exit { close rescue nil }
+    end
+  end
+end
