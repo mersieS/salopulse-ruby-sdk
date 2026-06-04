@@ -2,7 +2,7 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.2.0] - 2026-06-04
+## [0.2.1] - 2026-06-04
 
 First public release of the rewritten Salopulse APM SDK. Bumped past the
 legacy `salopulse` 0.1.x line on RubyGems.
