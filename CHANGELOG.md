@@ -2,6 +2,20 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-06-08
+
+### Added
+- Sidekiq instrumentation with auto-install via Railtie
+  - `SidekiqServerMiddleware` opens a `RequestContext` for each job
+    (`endpoint: "Foo::BarJob"`, `http_method: "JOB"`, `source: :sidekiq`),
+    captures exceptions, emits a `capture_performance` event with the job
+    duration, and flushes request-scoped SQL events
+  - `SidekiqClientMiddleware` propagates `parent_request_id` from the
+    enqueueing request into the job payload so background work can be
+    correlated back to the originating HTTP request
+- `Salopulse::RequestContext.start` now accepts `source:`,
+  `request_id:`, and `parent_request_id:` keyword arguments
+
 ## [0.2.3] - 2026-06-04
 
 First public release of the rewritten Salopulse APM SDK. Bumped past the

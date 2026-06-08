@@ -7,11 +7,13 @@ module Salopulse
 
     module_function
 
-    def start(endpoint:, http_method:)
+    def start(endpoint:, http_method:, source: :http, request_id: nil, parent_request_id: nil)
       Thread.current[KEY] = {
-        request_id: SecureRandom.uuid,
+        request_id: request_id || SecureRandom.uuid,
+        parent_request_id: parent_request_id,
         endpoint: endpoint,
         http_method: http_method,
+        source: source,
         sql_events: [],
         sql_fingerprint_counts: Hash.new(0),
         started_at: monotonic_now,

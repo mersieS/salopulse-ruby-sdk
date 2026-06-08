@@ -10,6 +10,13 @@ module Salopulse
       end
     end
 
+    initializer "salopulse.sidekiq" do
+      if defined?(::Sidekiq)
+        require_relative "instrumentation/sidekiq"
+        Salopulse::Instrumentation::Sidekiq.install!
+      end
+    end
+
     config.after_initialize do
       client = Salopulse::Client.instance
       if client.uninitialized? && ENV["SALOPULSE_DSN"]
