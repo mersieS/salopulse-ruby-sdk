@@ -2,6 +2,17 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-06-10
+
+### Added
+- `StackFrameBuilder` parses exception backtraces into structured frames and
+  attaches `pre_context`, `context_line`, and `post_context` source lines for
+  in-app frames. `capture_exception` now sends a `stack_frames` array
+  alongside the existing `stack_trace` string, enabling source-snippet
+  rendering in the dashboard
+- `Configuration#app_root` controls which paths are treated as in-app; defaults
+  to `Rails.root` when Rails is loaded and `Dir.pwd` otherwise
+
 ## [0.3.0] - 2026-06-08
 
 ### Added

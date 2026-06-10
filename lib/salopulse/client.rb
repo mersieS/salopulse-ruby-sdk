@@ -9,6 +9,7 @@ require_relative "flusher"
 require_relative "sanitizer"
 require_relative "local_fingerprint"
 require_relative "request_context"
+require_relative "stack_frame_builder"
 
 module Salopulse
   class Client
@@ -92,10 +93,12 @@ module Salopulse
       return unless sample?
 
       ctx = RequestContext.current
+      backtrace = Array(error.backtrace)
       data = {
         "error_class" => error.class.name,
         "message" => error.message.to_s,
-        "stack_trace" => Array(error.backtrace).join("\n"),
+        "stack_trace" => backtrace.join("\n"),
+        "stack_frames" => StackFrameBuilder.call(backtrace, app_root: configuration&.app_root),
         "endpoint" => ctx&.dig(:endpoint),
         "http_method" => ctx&.dig(:http_method)
       }

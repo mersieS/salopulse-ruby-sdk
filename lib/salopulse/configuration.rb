@@ -4,7 +4,8 @@ module Salopulse
   class Configuration
     attr_accessor :dsn, :release, :environment, :sample_rate,
                   :flush_interval, :flush_batch_size, :n1_threshold,
-                  :before_send, :logger, :enabled, :max_buffer_size
+                  :before_send, :logger, :enabled, :max_buffer_size,
+                  :app_root
 
     def initialize
       @release = nil
@@ -17,6 +18,16 @@ module Salopulse
       @logger = Logger.new($stdout, level: Logger::WARN)
       @enabled = true
       @max_buffer_size = 10_000
+      @app_root = detect_app_root
+    end
+
+    private
+
+    def detect_app_root
+      return Rails.root.to_s if defined?(Rails) && Rails.respond_to?(:root) && Rails.root
+      Dir.pwd
+    rescue StandardError
+      Dir.pwd
     end
   end
 end
