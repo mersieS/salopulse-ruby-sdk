@@ -2,6 +2,16 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-06-10
+
+### Added
+- Deploy tracking: when `release` is configured, the SDK now emits a one-shot
+  `"deploy"` event on `init` (process-scoped, idempotent on the backend by
+  `(project_environment_id, release)`). Captures runtime, framework, and host
+  automatically; users can enrich via the new `release_metadata` config
+  (known keys `sha`, `deployed_by`, `previous_release` are promoted, everything
+  else flows into a free-form metadata hash). Toggle off with `deploys: false`
+
 ## [0.4.0] - 2026-06-10
 
 ### Added

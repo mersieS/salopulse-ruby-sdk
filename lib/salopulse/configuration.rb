@@ -5,7 +5,7 @@ module Salopulse
     attr_accessor :dsn, :release, :environment, :sample_rate,
                   :flush_interval, :flush_batch_size, :n1_threshold,
                   :before_send, :logger, :enabled, :max_buffer_size,
-                  :app_root
+                  :app_root, :deploys, :release_metadata
 
     def initialize
       @release = nil
@@ -19,6 +19,8 @@ module Salopulse
       @enabled = true
       @max_buffer_size = 10_000
       @app_root = detect_app_root
+      @deploys = true
+      @release_metadata = {}
     end
 
     private

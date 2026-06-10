@@ -1,4 +1,5 @@
 require "time"
+require "socket"
 require "singleton"
 require_relative "version"
 require_relative "configuration"
@@ -41,6 +42,7 @@ module Salopulse
         install_at_exit_hook
 
         @initialized = true
+        announce_deploy!
         self
       end
     end
@@ -195,9 +197,49 @@ module Salopulse
       @dsn = nil
       @pid = nil
       @initialized = false
+      @deploy_announced = false
     end
 
     private
+
+    KNOWN_RELEASE_META = %w[sha deployed_by previous_release].freeze
+
+    def announce_deploy!
+      return if @deploy_announced
+      return unless @configuration&.deploys
+      return if @configuration.release.to_s.empty?
+
+      meta = (@configuration.release_metadata || {}).each_with_object({}) { |(k, v), h| h[k.to_s] = v }
+      extras = meta.reject { |k, _| KNOWN_RELEASE_META.include?(k) }
+
+      data = {
+        "release"          => @configuration.release,
+        "deployed_at"      => Time.now.utc.iso8601(3),
+        "runtime"          => "ruby #{RUBY_VERSION}",
+        "framework"        => detect_framework,
+        "host"             => detect_host,
+        "sha"              => meta["sha"],
+        "deployed_by"      => meta["deployed_by"],
+        "previous_release" => meta["previous_release"],
+        "metadata"         => extras.empty? ? nil : extras
+      }.compact
+
+      enqueue(build_event(type: "deploy", data: data, ctx: nil))
+      @deploy_announced = true
+    rescue StandardError => e
+      @configuration&.logger&.warn("[Salopulse] deploy announce failed: #{e.class}: #{e.message}")
+    end
+
+    def detect_framework
+      return "rails #{Rails::VERSION::STRING}" if defined?(Rails) && defined?(Rails::VERSION)
+      nil
+    end
+
+    def detect_host
+      Socket.gethostname
+    rescue StandardError
+      nil
+    end
 
     def enqueue(event)
       return false unless ensure_runtime_ready!
