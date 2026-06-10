@@ -2,6 +2,16 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.1] - 2026-06-10
+
+### Changed
+- `StackFrameBuilder` now dedupes consecutive frames that share the same
+  `(file, line)` pair, keeping the outer frame. Ruby 3.3+ enhanced
+  backtraces emit a separate frame for the raising operator (e.g.
+  `'/'`) on the same line as the calling method (e.g. `'divide_by_zero'`);
+  the dashboard previously rendered two cards with identical source
+  context. The kept frame's method name is the more descriptive caller
+
 ## [0.5.0] - 2026-06-10
 
 ### Added

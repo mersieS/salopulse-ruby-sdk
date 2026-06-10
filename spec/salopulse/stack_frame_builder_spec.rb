@@ -68,6 +68,31 @@ RSpec.describe Salopulse::StackFrameBuilder do
     expect(frame).not_to have_key("context_line")
   end
 
+  it "dedupes consecutive frames that share file and line, keeping the outer one" do
+    bt = [
+      "#{app_file}:10:in `/'",
+      "#{app_file}:10:in `divide_by_zero'",
+      "#{app_file}:5:in `call'"
+    ]
+
+    frames = described_class.call(bt, app_root: tmpdir)
+    expect(frames.size).to eq(2)
+    expect(frames[0]["line"]).to eq(10)
+    expect(frames[0]["method"]).to eq("divide_by_zero")
+    expect(frames[1]["line"]).to eq(5)
+    expect(frames[1]["method"]).to eq("call")
+  end
+
+  it "does not dedupe frames at different lines in the same file" do
+    bt = [
+      "#{app_file}:10:in `a'",
+      "#{app_file}:11:in `b'"
+    ]
+
+    frames = described_class.call(bt, app_root: tmpdir)
+    expect(frames.size).to eq(2)
+  end
+
   it "caps the number of frames" do
     bt = Array.new(described_class::MAX_FRAMES + 10) { |i| "#{app_file}:#{(i % 19) + 1}:in `m#{i}'" }
 

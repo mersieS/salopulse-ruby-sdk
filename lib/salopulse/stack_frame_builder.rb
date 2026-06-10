@@ -19,10 +19,22 @@ module Salopulse
     end
 
     def call
-      @backtrace.first(MAX_FRAMES).filter_map { |line| build_frame(line.to_s) }
+      frames = @backtrace.first(MAX_FRAMES).filter_map { |line| build_frame(line.to_s) }
+      dedupe_consecutive(frames)
     end
 
     private
+
+    def dedupe_consecutive(frames)
+      frames.each_with_object([]) do |frame, acc|
+        previous = acc.last
+        if previous && previous["abs_path"] == frame["abs_path"] && previous["line"] == frame["line"]
+          acc[-1] = frame
+        else
+          acc << frame
+        end
+      end
+    end
 
     def build_frame(raw)
       match = BACKTRACE_LINE.match(raw)
