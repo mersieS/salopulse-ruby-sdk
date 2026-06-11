@@ -98,4 +98,49 @@ RSpec.describe Salopulse::Client do
     expect(event[:envelope]["sdk"]).to eq({ "version" => Salopulse::VERSION, "platform" => "ruby" })
     Salopulse::RequestContext.clear
   end
+
+  it "emits the configured service name on the envelope" do
+    client.init(dsn: VALID_DSN, service_name: "checkout-svc")
+    client.capture_message("hi")
+    event = client.buffer.drain(max: 10).first
+    expect(event[:envelope]["service"]).to eq("checkout-svc")
+  end
+
+  it "omits service from the envelope when unconfigured" do
+    client.init(dsn: VALID_DSN)
+    client.capture_message("hi")
+    event = client.buffer.drain(max: 10).first
+    expect(event[:envelope]).not_to have_key("service")
+  end
+
+  it "performance events carry request context and a span count" do
+    client.init(dsn: VALID_DSN)
+    Salopulse::RequestContext.start(endpoint: "/v2/checkout", http_method: "POST")
+    client.capture_sql(query: "SELECT 1", duration_ms: 1)
+    client.capture_sql(query: "SELECT 2", duration_ms: 1)
+    client.capture_performance(
+      endpoint: "/v2/checkout", http_method: "POST", duration_ms: 120, status_code: 500,
+      ip: "81.214.44.19",
+      request_headers: { "Content-Type" => "application/json" },
+      request_params: { "order_id" => "ord_4821" }
+    )
+    perf = client.buffer.drain(max: 10).find { |e| e[:type] == "performance" }
+    expect(perf[:data]["ip"]).to eq("81.214.44.19")
+    expect(perf[:data]["request_headers"]).to eq({ "Content-Type" => "application/json" })
+    expect(perf[:data]["request_params"]).to eq({ "order_id" => "ord_4821" })
+    expect(perf[:data]["span_count"]).to eq(3) # 2 SQL spans + the request span
+    Salopulse::RequestContext.clear
+  end
+
+  it "assigns a 1-based capture sequence to a request's SQL events" do
+    client.init(dsn: VALID_DSN)
+    Salopulse::RequestContext.start(endpoint: "/v2/checkout", http_method: "POST")
+    client.capture_sql(query: "BEGIN", duration_ms: 1)
+    client.capture_sql(query: "SELECT * FROM orders", duration_ms: 1)
+    client.capture_sql(query: "ROLLBACK", duration_ms: 1)
+    client.flush_request_scope_events
+    sequences = client.buffer.drain(max: 10).map { |e| e[:data]["sequence"] }
+    expect(sequences).to eq([1, 2, 3])
+    Salopulse::RequestContext.clear
+  end
 end

@@ -46,6 +46,10 @@ module Salopulse
     def record_sql_event(event, fingerprint)
       ctx = current
       return false unless ctx
+      # 1-based position in capture order, so the backend can reconstruct the
+      # exact query sequence within a request (created_at alone is ambiguous —
+      # the whole batch shares one enqueue timestamp).
+      event[:data]["sequence"] = ctx[:sql_events].length + 1 if event[:data].is_a?(Hash)
       ctx[:sql_events] << [event, fingerprint]
       ctx[:sql_fingerprint_counts][fingerprint] += 1
       true

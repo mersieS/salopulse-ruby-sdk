@@ -2,7 +2,7 @@ require "logger"
 
 module Salopulse
   class Configuration
-    attr_accessor :dsn, :release, :environment, :sample_rate,
+    attr_accessor :dsn, :release, :environment, :service_name, :sample_rate,
                   :flush_interval, :flush_batch_size, :n1_threshold,
                   :before_send, :logger, :enabled, :max_buffer_size,
                   :app_root, :deploys, :release_metadata
@@ -10,6 +10,7 @@ module Salopulse
     def initialize
       @release = nil
       @environment = nil
+      @service_name = nil
       @sample_rate = 1.0
       @flush_interval = 5
       @flush_batch_size = 100

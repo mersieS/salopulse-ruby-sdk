@@ -25,11 +25,15 @@ module Salopulse
           raise
         ensure
           begin
+            snapshot = env_snapshot(env)
             @client.capture_performance(
               endpoint: endpoint,
               http_method: http_method,
               duration_ms: Salopulse::RequestContext.elapsed_ms,
-              status_code: status
+              status_code: status,
+              ip: snapshot["ip"],
+              request_headers: snapshot["headers"],
+              request_params: snapshot["params"]
             )
             @client.flush_request_scope_events
           rescue StandardError

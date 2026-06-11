@@ -31,6 +31,23 @@ RSpec.describe Salopulse::Instrumentation::RackMiddleware do
     expect(perf[:data]["http_method"]).to eq("GET")
   end
 
+  it "attaches client ip and scrubbed headers/params to the performance event" do
+    env = env_for(path: "/v2/checkout", method: "POST").merge(
+      "HTTP_CONTENT_TYPE" => "application/json",
+      "HTTP_AUTHORIZATION" => "Bearer secret-token",
+      "action_dispatch.request.parameters" => { "order_id" => "ord_4821", "password" => "hunter2" }
+    )
+    inner = ->(_e) { [500, {}, ["err"]] }
+    described_class.new(inner, client).call(env)
+
+    perf = client.buffer.drain(max: 100).find { |e| e[:type] == "performance" }
+    expect(perf[:data]["ip"]).to eq("1.2.3.4")
+    expect(perf[:data]["request_headers"]["Authorization"]).to eq("[FILTERED]")
+    expect(perf[:data]["request_params"]["order_id"]).to eq("ord_4821")
+    expect(perf[:data]["request_params"]["password"]).to eq("[FILTERED]")
+    expect(perf[:data]["span_count"]).to eq(1) # no SQL captured, just the request span
+  end
+
   it "captures exceptions and re-raises" do
     inner = ->(_e) { raise StandardError, "boom" }
     mw = described_class.new(inner, client)

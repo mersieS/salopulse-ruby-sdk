@@ -2,6 +2,18 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-06-11
+
+### Added
+- Performance events now carry request context the backend's request-trace view
+  needs: client `ip`, scrubbed `request_headers` and `request_params` (reusing
+  the same sanitizer as exception capture), and a `span_count` (captured SQL
+  queries plus the request span).
+- SQL events now carry a 1-based `sequence` recording capture order, so the
+  backend can reconstruct a request's query order (a single enqueue timestamp
+  is shared across the batch and can't disambiguate it).
+- New `config.service_name` is emitted as `envelope["service"]` on every event.
+
 ## [0.5.1] - 2026-06-10
 
 ### Changed

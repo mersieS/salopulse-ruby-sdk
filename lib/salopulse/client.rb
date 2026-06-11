@@ -127,7 +127,8 @@ module Salopulse
       enqueue(build_event(type: "error", data: data, ctx: ctx))
     end
 
-    def capture_performance(endpoint:, http_method:, duration_ms:, status_code:, cpu_usage: nil, memory_usage: nil)
+    def capture_performance(endpoint:, http_method:, duration_ms:, status_code:, cpu_usage: nil, memory_usage: nil,
+                            ip: nil, request_headers: nil, request_params: nil)
       return if disabled?
       return unless sample?
 
@@ -140,6 +141,12 @@ module Salopulse
       }
       data["cpu_usage"] = cpu_usage if cpu_usage
       data["memory_usage"] = memory_usage if memory_usage
+      data["ip"] = ip if ip
+      data["request_headers"] = request_headers if request_headers
+      data["request_params"] = request_params if request_params
+      # Spans the SDK recorded for this request: the captured SQL queries plus the
+      # request span itself. Grows as more instrumentation (HTTP, cache) is added.
+      data["span_count"] = ctx[:sql_events].length + 1 if ctx
 
       enqueue(build_event(type: "performance", data: data, ctx: ctx))
     end
@@ -255,6 +262,7 @@ module Salopulse
       envelope = {
         "request_id" => ctx&.dig(:request_id),
         "release" => @configuration.release,
+        "service" => @configuration.service_name,
         "sdk" => { "version" => Salopulse::VERSION, "platform" => "ruby" },
         "timestamp" => Time.now.utc.iso8601(3)
       }.merge(extra_envelope).compact
