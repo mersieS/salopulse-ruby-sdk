@@ -45,7 +45,7 @@ RSpec.describe Salopulse::Instrumentation::RackMiddleware do
     expect(perf[:data]["request_headers"]["Authorization"]).to eq("[FILTERED]")
     expect(perf[:data]["request_params"]["order_id"]).to eq("ord_4821")
     expect(perf[:data]["request_params"]["password"]).to eq("[FILTERED]")
-    expect(perf[:data]["span_count"]).to eq(1) # no SQL captured, just the request span
+    expect(perf[:data]["span_count"]).to eq(1)
   end
 
   it "captures exceptions and re-raises" do

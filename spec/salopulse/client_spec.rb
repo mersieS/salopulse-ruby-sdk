@@ -77,7 +77,7 @@ RSpec.describe Salopulse::Client do
     Salopulse::RequestContext.start(endpoint: "/orders", http_method: "GET")
     5.times { |i| client.capture_sql(query: "SELECT * FROM items WHERE id = #{i}", duration_ms: 1) }
     client.capture_sql(query: "SELECT * FROM orders WHERE id = 1", duration_ms: 1)
-    expect(client.buffer.size).to eq(0) # buffered in request scope
+    expect(client.buffer.size).to eq(0)
     client.flush_request_scope_events
     drained = client.buffer.drain(max: 100)
     n1 = drained.select { |e| e[:data]["query"].include?("items") }
@@ -128,7 +128,7 @@ RSpec.describe Salopulse::Client do
     expect(perf[:data]["ip"]).to eq("81.214.44.19")
     expect(perf[:data]["request_headers"]).to eq({ "Content-Type" => "application/json" })
     expect(perf[:data]["request_params"]).to eq({ "order_id" => "ord_4821" })
-    expect(perf[:data]["span_count"]).to eq(3) # 2 SQL spans + the request span
+    expect(perf[:data]["span_count"]).to eq(3)
     Salopulse::RequestContext.clear
   end
 

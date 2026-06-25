@@ -37,7 +37,6 @@ module Salopulse
             )
             @client.flush_request_scope_events
           rescue StandardError
-            # never let SDK errors propagate
           end
           Salopulse::RequestContext.clear
         end

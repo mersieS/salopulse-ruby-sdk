@@ -44,7 +44,6 @@ RSpec.describe Salopulse::Instrumentation::ActiveRecordSubscriber do
   end
 
   it "ignores queries while transport is suppressed" do
-    # simulate context, then suppression
     Salopulse::RequestContext.start(endpoint: "/", http_method: "GET")
     Salopulse::RequestContext.with_suppression do
       emit(sql: "SELECT 1")

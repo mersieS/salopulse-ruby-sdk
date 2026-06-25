@@ -59,7 +59,6 @@ module Salopulse
       !@initialized || !@configuration&.enabled
     end
 
-    # --- Capture API ---------------------------------------------------------
 
     def capture_sql(query:, duration_ms:, rows_returned: nil)
       return if disabled?
@@ -144,14 +143,11 @@ module Salopulse
       data["ip"] = ip if ip
       data["request_headers"] = request_headers if request_headers
       data["request_params"] = request_params if request_params
-      # Spans the SDK recorded for this request: the captured SQL queries plus the
-      # request span itself. Grows as more instrumentation (HTTP, cache) is added.
       data["span_count"] = ctx[:sql_events].length + 1 if ctx
 
       enqueue(build_event(type: "performance", data: data, ctx: ctx))
     end
 
-    # --- Request scope -------------------------------------------------------
 
     def flush_request_scope_events
       ctx = RequestContext.current
@@ -168,7 +164,6 @@ module Salopulse
       end
     end
 
-    # --- Context helpers -----------------------------------------------------
 
     def set_user(attrs)
       RequestContext.set_user(attrs)
@@ -178,7 +173,6 @@ module Salopulse
       RequestContext.set_tag(key, value)
     end
 
-    # --- Lifecycle -----------------------------------------------------------
 
     def flush(timeout: 5)
       return 0 if disabled?
@@ -194,7 +188,6 @@ module Salopulse
       @initialized = false
     end
 
-    # Used by tests to wipe singleton state.
     def reset!
       close if @initialized
       @configuration = nil
